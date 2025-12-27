@@ -1,18 +1,13 @@
 "use client"
-import { useState, useEffect, useCallback, useMemo } from "react"
-import { Button } from "@/components/ui/button"
-import { Loader2, Pencil, Trash2 } from "lucide-react"
-import { ErrorBoundary } from "@/components/error-boundary"
-import { MessageList } from "@/components/message-list"
-import { MessageInput } from "@/components/message-input"
-import { CharacterSidebar } from "@/components/character-sidebar"
-import { CharacterDialog } from "@/components/character-dialog"
 import { BackgroundSettings } from "@/components/background-settings"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { MessageSearch } from "@/components/message-search"
+import { CharacterDialog } from "@/components/character-dialog"
+import { CharacterSidebar } from "@/components/character-sidebar"
+import { ErrorBoundary } from "@/components/error-boundary"
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts"
-import { useChat } from "@/hooks/use-chat"
-import { toast } from "@/hooks/use-toast"
+import { MessageInput } from "@/components/message-input"
+import { MessageList } from "@/components/message-list"
+import { MessageSearch } from "@/components/message-search"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +18,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
+import { useChat } from "@/hooks/use-chat"
+import { toast } from "@/hooks/use-toast"
+import { Loader2, Pencil, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 interface Character {
   id: string
@@ -413,8 +413,8 @@ export function ChatInterface() {
         body: JSON.stringify({
           messages: history,
           character: { prompt: composePrompt + "\n补充要求：请写成2-4句、信息充实，不少于40字；如合适，附带1个自然的追问。" },
-          // 固定使用 Gemini 大模型进行 AI 帮回
-          model: "gemini-2.0-flash",
+          // 使用 DeepSeek 进行 AI 帮回
+          model: "deepseek-chat",
         }),
       })
       if (!resp.ok) throw new Error(`AI生成失败: ${resp.status}`)
@@ -458,31 +458,6 @@ export function ChatInterface() {
         }
       }
       if (!draft.trim()) throw new Error("AI未返回内容")
-      // 直接以 AI 身份发送并保存
-      /* disable auto-send */ if (false) { const aiMsg = {
-        id: Date.now().toString(),
-        content: draft,
-        sender: "ai" as const,
-        timestamp: new Date(),
-        characterId: currentCharacter.id,
-      }
-      /* setMessages disabled: draft goes to input */
-      try {
-        await fetch("/api/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: draft,
-            role: "assistant",
-            characterId: currentCharacter.id,
-            userId,
-          }),
-        })
-      } catch (e) {
-        console.warn("保存AI起草消息失败", e)
-      }
-      // 返回空串，避免写入输入框
-      }
       return draft
     } catch (e: any) {
       toast({ title: "AI帮回失败", description: e?.message || "请稍后重试", variant: "destructive" })

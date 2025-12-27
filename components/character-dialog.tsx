@@ -269,6 +269,7 @@ export function CharacterDialog({ open, onOpenChange, character, onSave, mode }:
                 <SelectItem value="deepseek-reasoner">deepseek-reasoner（更强推理）</SelectItem>
                 <SelectItem value="claude-opus-4-5-thinking">claude-opus-4-5-thinking（本地）</SelectItem>
                 <SelectItem value="gemini-3-flash">gemini-3-flash（本地）</SelectItem>
+                <SelectItem value="gemini-3-pro-high">gemini-3-pro-high（本地）</SelectItem>
               </SelectContent>
             </Select>
           </div>

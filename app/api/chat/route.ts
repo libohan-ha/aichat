@@ -21,7 +21,7 @@ function getLocalApiConfig() {
 }
 
 // 本地API支持的模型列表
-const LOCAL_API_MODELS = ["claude-opus-4-5-thinking", "gemini-3-flash"]
+const LOCAL_API_MODELS = ["claude-opus-4-5-thinking", "gemini-3-flash", "gemini-3-pro-high"]
 
 function isLocalApiModel(model: string): boolean {
   return LOCAL_API_MODELS.some(m => model.toLowerCase() === m.toLowerCase())

@@ -2,7 +2,6 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -20,8 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
-import { Upload, X, Loader2 } from "lucide-react"
+import { Loader2, Upload, X } from "lucide-react"
+import { useEffect, useState } from "react"
 
 interface BackgroundSettingsProps {
   open: boolean
@@ -112,7 +112,7 @@ export function BackgroundSettings({
   }
 
   const handleSave = () => {
-    onBackgroundChange(background)
+    onBackgroundChange({ background, size, position, repeat, bubbleUserOpacity: userOpacity, bubbleAiOpacity: aiOpacity })
     onOpenChange(false)
   }
 
@@ -304,7 +304,7 @@ export function BackgroundSettings({
             取消
           </Button>
           <Button
-            onClick={() => onBackgroundChange({ background, size, position, repeat, bubbleUserOpacity: userOpacity, bubbleAiOpacity: aiOpacity })}
+            onClick={handleSave}
             disabled={isUploading}
             className="w-full sm:w-auto h-10 touch-manipulation"
           >

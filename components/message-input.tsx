@@ -2,13 +2,13 @@
 
 import type React from "react"
 
-import { useState, useRef, useCallback, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Send, Sparkles, Loader2 } from "lucide-react"
+import { ImagePlus, Loader2, Send, Sparkles, X } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 interface MessageInputProps {
-  onSendMessage: (content: string) => void
+  onSendMessage: (content: string, imageUrl?: string) => void
   disabled?: boolean
   placeholder?: string
   onAiCompose?: () => Promise<string>
@@ -18,7 +18,10 @@ interface MessageInputProps {
 export function MessageInput({ onSendMessage, disabled, placeholder = "输入消息...", onAiCompose, aiComposing }: MessageInputProps) {
   const [message, setMessage] = useState("")
   const [isMobile, setIsMobile] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const checkMobile = () => {
@@ -103,10 +106,11 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
   }, [isMobile])
 
   const handleSend = useCallback(() => {
-    if (!message.trim() || disabled) return
+    if ((!message.trim() && !selectedImage) || disabled) return
 
-    onSendMessage(message.trim())
+    onSendMessage(message.trim(), selectedImage || undefined)
     setMessage("")
+    setSelectedImage(null)
 
     // 重置textarea高度并重新聚焦
     if (textareaRef.current) {
@@ -120,7 +124,7 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
         }, 50)
       }
     }
-  }, [message, disabled, onSendMessage, isMobile])
+  }, [message, selectedImage, disabled, onSendMessage, isMobile])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -178,6 +182,52 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
     }
   }, [onAiCompose, disabled, isMobile])
 
+  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // 验证文件类型
+    if (!file.type.startsWith("image/")) {
+      return
+    }
+
+    // 验证文件大小 (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("type", "chat")
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        setSelectedImage(result.url)
+      }
+    } catch (error) {
+      console.error("图片上传失败:", error)
+    } finally {
+      setIsUploading(false)
+      // 重置文件输入
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }, [])
+
+  const handleRemoveImage = useCallback(() => {
+    setSelectedImage(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }, [])
 
   return (
     <div
@@ -186,6 +236,24 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
         paddingBottom: isMobile ? "max(12px, env(safe-area-inset-bottom))" : undefined,
       }}
     >
+      {/* 图片预览 */}
+      {selectedImage && (
+        <div className="mb-2 relative inline-block">
+          <img
+            src={selectedImage}
+            alt="待发送图片"
+            className="max-h-24 sm:max-h-32 rounded-lg border border-border object-cover"
+          />
+          <Button
+            variant="destructive"
+            size="sm"
+            className="absolute -top-2 -right-2 w-6 h-6 p-0 rounded-full"
+            onClick={handleRemoveImage}
+          >
+            <X className="w-3 h-3" />
+          </Button>
+        </div>
+      )}
 
       <div className="flex gap-2 items-end">
         <div className="flex-1">
@@ -222,12 +290,29 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
           )}
           <Button
             onClick={handleSend}
-            disabled={disabled || !message.trim()}
+            disabled={disabled || (!message.trim() && !selectedImage)}
             size="sm"
             className={`p-0 touch-manipulation ${isMobile ? "w-9 h-9" : "w-10 h-10"}`}
           >
             <Send className="w-4 h-4" />
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled || isUploading}
+            className={`p-0 touch-manipulation ${isMobile ? "w-9 h-9" : "w-10 h-10"}`}
+            title="添加图片"
+          >
+            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImageSelect}
+          />
         </div>
       </div>
 

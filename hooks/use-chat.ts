@@ -31,8 +31,8 @@ export function useChat({ userId, onError }: UseChatOptions) {
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const sendMessage = useCallback(
-    async (content: string, character: Character) => {
-      if (!content.trim()) return
+    async (content: string, character: Character, imageUrl?: string) => {
+      if (!content.trim() && !imageUrl) return
       if (isLoading) return
 
       // 取消之前的请求
@@ -51,6 +51,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
           sender: "user",
           timestamp: new Date(),
           characterId: character.id,
+          imageUrl,
         }
 
         setMessages((prev) => [...prev, userMessage])
@@ -65,6 +66,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
             role: "user",
             characterId: character.id,
             userId,
+            image: imageUrl,
           }),
           signal: abortController.signal,
         })

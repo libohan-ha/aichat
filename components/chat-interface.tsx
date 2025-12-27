@@ -215,6 +215,8 @@ export function ChatInterface() {
     async (characterData: Omit<Character, "id"> & { id?: string }) => {
       try {
         if (characterData.id) {
+          // 保留现有的透明度设置（如果没有新值的话）
+          const existingCharacter = characters.find(c => c.id === characterData.id)
           const response = await fetch(`/api/characters/${characterData.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -225,6 +227,12 @@ export function ChatInterface() {
               background: characterData.background,
               userAvatar: characterData.userAvatar,
               model: characterData.model,
+              // 保留现有的背景和透明度设置
+              backgroundSize: existingCharacter?.backgroundSize,
+              backgroundPosition: existingCharacter?.backgroundPosition,
+              backgroundRepeat: existingCharacter?.backgroundRepeat,
+              bubbleUserOpacity: characterData.bubbleUserOpacity ?? existingCharacter?.bubbleUserOpacity,
+              bubbleAiOpacity: characterData.bubbleAiOpacity ?? existingCharacter?.bubbleAiOpacity,
             }),
           })
 
@@ -239,6 +247,11 @@ export function ChatInterface() {
                 background: characterData.background,
                 userAvatar: characterData.userAvatar,
                 model: characterData.model,
+                backgroundSize: existingCharacter?.backgroundSize,
+                backgroundPosition: existingCharacter?.backgroundPosition,
+                backgroundRepeat: existingCharacter?.backgroundRepeat,
+                bubbleUserOpacity: characterData.bubbleUserOpacity ?? existingCharacter?.bubbleUserOpacity,
+                bubbleAiOpacity: characterData.bubbleAiOpacity ?? existingCharacter?.bubbleAiOpacity,
               })
             }
             toast({ title: "角色更新成功" })
@@ -254,6 +267,8 @@ export function ChatInterface() {
               background: characterData.background,
               userAvatar: characterData.userAvatar,
               model: characterData.model,
+              bubbleUserOpacity: characterData.bubbleUserOpacity ?? 1,
+              bubbleAiOpacity: characterData.bubbleAiOpacity ?? 1,
               userId,
             }),
           })

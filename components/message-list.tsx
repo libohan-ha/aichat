@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useCallback, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 // Replace custom ScrollArea with native scrolling for robustness
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Copy, Plus } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+import { Copy, Plus } from "lucide-react"
 
 interface Message {
   id: string
@@ -13,7 +13,7 @@ interface Message {
   sender: "user" | "ai"
   timestamp: Date
   characterId?: string
-  imageUrl?: string
+  imageUrls?: string[]
 }
 
 interface Character {
@@ -192,12 +192,21 @@ export function MessageList({
                         maxWidth: '100%',
                       }}
                     >
-                      {message.imageUrl && (
-                        <img
-                          src={message.imageUrl || "/placeholder.svg"}
-                          alt="上传的图片"
-                          className="max-w-full h-auto rounded mb-2 max-h-48 sm:max-h-64 object-cover"
-                        />
+                      {message.imageUrls && message.imageUrls.length > 0 && (
+                        <div className={`flex flex-wrap gap-2 mb-2 ${message.imageUrls.length === 1 ? '' : ''}`}>
+                          {message.imageUrls.map((url, idx) => (
+                            <img
+                              key={idx}
+                              src={url || "/placeholder.svg"}
+                              alt={`上传的图片 ${idx + 1}`}
+                              className={`rounded object-cover ${
+                                message.imageUrls!.length === 1
+                                  ? 'max-w-full max-h-48 sm:max-h-64'
+                                  : 'max-w-[45%] max-h-32 sm:max-h-40'
+                              }`}
+                            />
+                          ))}
+                        </div>
                       )}
                       <p className="whitespace-pre-wrap break-words text-sm sm:text-base leading-relaxed">
                         {message.content || ""}

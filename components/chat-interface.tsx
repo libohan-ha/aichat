@@ -394,9 +394,9 @@ export function ChatInterface() {
   const [aiComposing, setAiComposing] = useState(false)
 
   const handleSendMessage = useCallback(
-    async (content: string, imageUrl?: string) => {
+    async (content: string, imageUrls?: string[]) => {
       if (!currentCharacter) return
-      await sendMessage(content, currentCharacter, imageUrl)
+      await sendMessage(content, currentCharacter, imageUrls)
     },
     [currentCharacter, sendMessage],
   )

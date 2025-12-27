@@ -1,5 +1,5 @@
-import { type NextRequest, NextResponse } from "next/server"
 import { localDB } from "@/lib/local-storage"
+import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       content: msg.content,
       role: msg.role,
       timestamp: msg.createdAt,
-      image: msg.image,
+      images: msg.images,
     }))
 
     return NextResponse.json({ success: true, messages: formattedMessages })
@@ -33,19 +33,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { content, role, characterId, userId = "default", image } = body
+    const { content, role, characterId, userId = "default", images } = body
 
-    // 验证必需字段
-    if (!content || !role || !characterId) {
+    // 验证必需字段 - 允许只有图片没有文字
+    if ((!content && (!images || images.length === 0)) || !role || !characterId) {
       return NextResponse.json({ error: "缺少必需字段" }, { status: 400 })
     }
 
     const message = await localDB.createMessage({
-      content,
+      content: content || "",
       role,
       characterId,
       userId,
-      image,
+      images,
     })
 
     return NextResponse.json({
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
         content: message.content,
         role: message.role,
         timestamp: message.createdAt,
-        image: message.image,
+        images: message.images,
       },
     })
   } catch (error) {

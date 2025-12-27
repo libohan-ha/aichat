@@ -1,6 +1,5 @@
-import { promises as fsp } from "fs"
-import { existsSync } from "fs"
-import { join, dirname } from "path"
+import { existsSync, promises as fsp } from "fs"
+import { dirname, join } from "path"
 
 export interface Character {
   id: string
@@ -26,7 +25,7 @@ export interface Message {
   role: "user" | "assistant"
   characterId: string
   userId: string
-  image?: string
+  images?: string[]
   createdAt: string
   updatedAt: string
 }

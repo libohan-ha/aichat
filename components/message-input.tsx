@@ -8,7 +8,7 @@ import { ImagePlus, Loader2, Send, Sparkles, X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 interface MessageInputProps {
-  onSendMessage: (content: string, imageUrl?: string) => void
+  onSendMessage: (content: string, imageUrls?: string[]) => void
   disabled?: boolean
   placeholder?: string
   onAiCompose?: () => Promise<string>
@@ -18,7 +18,7 @@ interface MessageInputProps {
 export function MessageInput({ onSendMessage, disabled, placeholder = "输入消息...", onAiCompose, aiComposing }: MessageInputProps) {
   const [message, setMessage] = useState("")
   const [isMobile, setIsMobile] = useState(false)
-  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [selectedImages, setSelectedImages] = useState<string[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -106,11 +106,11 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
   }, [isMobile])
 
   const handleSend = useCallback(() => {
-    if ((!message.trim() && !selectedImage) || disabled) return
+    if ((!message.trim() && selectedImages.length === 0) || disabled) return
 
-    onSendMessage(message.trim(), selectedImage || undefined)
+    onSendMessage(message.trim(), selectedImages.length > 0 ? selectedImages : undefined)
     setMessage("")
-    setSelectedImage(null)
+    setSelectedImages([])
 
     // 重置textarea高度并重新聚焦
     if (textareaRef.current) {
@@ -124,7 +124,7 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
         }, 50)
       }
     }
-  }, [message, selectedImage, disabled, onSendMessage, isMobile])
+  }, [message, selectedImages, disabled, onSendMessage, isMobile])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -183,33 +183,38 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
   }, [onAiCompose, disabled, isMobile])
 
   const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    // 验证文件类型
-    if (!file.type.startsWith("image/")) {
-      return
-    }
-
-    // 验证文件大小 (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      return
-    }
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
     setIsUploading(true)
     try {
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("type", "chat")
+      const uploadPromises = Array.from(files).map(async (file) => {
+        // 验证文件类型
+        if (!file.type.startsWith("image/")) {
+          return null
+        }
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
+        const formData = new FormData()
+        formData.append("file", file)
+        formData.append("type", "chat")
+
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        })
+
+        const result = await response.json()
+        if (result.success) {
+          return result.url
+        }
+        return null
       })
 
-      const result = await response.json()
-      if (result.success) {
-        setSelectedImage(result.url)
+      const uploadedUrls = await Promise.all(uploadPromises)
+      const validUrls = uploadedUrls.filter((url): url is string => url !== null)
+      
+      if (validUrls.length > 0) {
+        setSelectedImages(prev => [...prev, ...validUrls])
       }
     } catch (error) {
       console.error("图片上传失败:", error)
@@ -222,11 +227,8 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
     }
   }, [])
 
-  const handleRemoveImage = useCallback(() => {
-    setSelectedImage(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
-    }
+  const handleRemoveImage = useCallback((index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index))
   }, [])
 
   return (
@@ -237,21 +239,25 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
       }}
     >
       {/* 图片预览 */}
-      {selectedImage && (
-        <div className="mb-2 relative inline-block">
-          <img
-            src={selectedImage}
-            alt="待发送图片"
-            className="max-h-24 sm:max-h-32 rounded-lg border border-border object-cover"
-          />
-          <Button
-            variant="destructive"
-            size="sm"
-            className="absolute -top-2 -right-2 w-6 h-6 p-0 rounded-full"
-            onClick={handleRemoveImage}
-          >
-            <X className="w-3 h-3" />
-          </Button>
+      {selectedImages.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {selectedImages.map((img, index) => (
+            <div key={index} className="relative inline-block">
+              <img
+                src={img}
+                alt={`待发送图片 ${index + 1}`}
+                className="max-h-24 sm:max-h-32 rounded-lg border border-border object-cover"
+              />
+              <Button
+                variant="destructive"
+                size="sm"
+                className="absolute -top-2 -right-2 w-6 h-6 p-0 rounded-full"
+                onClick={() => handleRemoveImage(index)}
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -290,7 +296,7 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
           )}
           <Button
             onClick={handleSend}
-            disabled={disabled || (!message.trim() && !selectedImage)}
+            disabled={disabled || (!message.trim() && selectedImages.length === 0)}
             size="sm"
             className={`p-0 touch-manipulation ${isMobile ? "w-9 h-9" : "w-10 h-10"}`}
           >
@@ -310,6 +316,7 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            multiple
             className="hidden"
             onChange={handleImageSelect}
           />

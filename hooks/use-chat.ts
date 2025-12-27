@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
 import { toast } from "@/hooks/use-toast"
+import { useCallback, useRef, useState } from "react"
 
 interface Message {
   id: string
@@ -9,7 +9,7 @@ interface Message {
   sender: "user" | "ai"
   timestamp: Date
   characterId?: string
-  imageUrl?: string
+  imageUrls?: string[]
 }
 
 interface Character {
@@ -31,8 +31,8 @@ export function useChat({ userId, onError }: UseChatOptions) {
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const sendMessage = useCallback(
-    async (content: string, character: Character, imageUrl?: string) => {
-      if (!content.trim() && !imageUrl) return
+    async (content: string, character: Character, imageUrls?: string[]) => {
+      if (!content.trim() && (!imageUrls || imageUrls.length === 0)) return
       if (isLoading) return
 
       // 取消之前的请求
@@ -51,7 +51,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
           sender: "user",
           timestamp: new Date(),
           characterId: character.id,
-          imageUrl,
+          imageUrls,
         }
 
         setMessages((prev) => [...prev, userMessage])
@@ -66,7 +66,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
             role: "user",
             characterId: character.id,
             userId,
-            image: imageUrl,
+            images: imageUrls,
           }),
           signal: abortController.signal,
         })
@@ -235,7 +235,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
             sender: msg.role === "user" ? "user" : "ai",
             timestamp: new Date(msg.timestamp),
             characterId: msg.characterId,
-            imageUrl: msg.image,
+            imageUrls: msg.images,
           }))
           setMessages(messagesData)
         }

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,10 +14,10 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Upload, X, Loader2 } from "lucide-react"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
+import { Loader2, Upload, X } from "lucide-react"
+import { useEffect, useState } from "react"
 
 interface Character {
   id: string
@@ -268,6 +268,7 @@ export function CharacterDialog({ open, onOpenChange, character, onSave, mode }:
                 <SelectItem value="deepseek-chat">deepseek-chat（通用）</SelectItem>
                 <SelectItem value="deepseek-reasoner">deepseek-reasoner（更强推理）</SelectItem>
                 <SelectItem value="gemini-2.0-flash">gemini-2.0-flash（Google）</SelectItem>
+                <SelectItem value="claude-opus-4-5-thinking">claude-opus-4-5-thinking（本地）</SelectItem>
               </SelectContent>
             </Select>
           </div>

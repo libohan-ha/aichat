@@ -14,6 +14,13 @@ function getDeepseekConfig() {
   return { apiKey, baseURL, model }
 }
 
+function getLocalClaudeConfig() {
+  const apiKey = process.env.LOCAL_CLAUDE_API_KEY || "sk-ace780b87a754995a3437a13518e99c9"
+  const baseURL = process.env.LOCAL_CLAUDE_BASE_URL || "http://127.0.0.1:8045/v1"
+  const model = process.env.LOCAL_CLAUDE_MODEL || "claude-opus-4-5-thinking"
+  return { apiKey, baseURL, model }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { messages, character, model: modelFromBody } = await request.json()
@@ -125,6 +132,48 @@ export async function POST(request: NextRequest) {
             controller.close()
           } catch (err) {
             controller.error(err)
+          }
+        },
+      })
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      })
+    }
+
+    // Check if using local Claude model
+    if (typeof chosenModel === "string" && chosenModel.toLowerCase().startsWith("claude")) {
+      const claudeConfig = getLocalClaudeConfig()
+      const claude = new OpenAI({ apiKey: claudeConfig.apiKey, baseURL: claudeConfig.baseURL })
+      
+      const completion = await claude.chat.completions.create({
+        model: chosenModel,
+        messages: [systemMessage, ...messages],
+        stream: true,
+        temperature: 0.7,
+        max_tokens: 4096,
+      })
+
+      // 创建流式响应
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const chunk of completion) {
+              const content = chunk.choices[0]?.delta?.content || ""
+              if (content) {
+                const data = encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+                controller.enqueue(data)
+              }
+            }
+            controller.close()
+          } catch (error) {
+            console.error("Stream error:", error)
+            controller.error(error)
           }
         },
       })

@@ -1,15 +1,10 @@
-import { type NextRequest, NextResponse } from "next/server"
 import { localDB } from "@/lib/local-storage"
+import { type NextRequest, NextResponse } from "next/server"
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const body = await request.json()
-    const url = new URL(request.url)
-    const pathId = url.pathname.split("/").pop() || ""
-    const id = (params as any)?.id ?? pathId
-    if (!id) {
-      return NextResponse.json({ error: "缺少角色ID" }, { status: 400 })
-    }
     const { name, avatar, prompt, background, backgroundSize, backgroundPosition, backgroundRepeat, userAvatar, bubbleUserOpacity, bubbleAiOpacity, model, userId = "default" } = body
 
     // 允许部分更新：至少提供一个可更新字段
@@ -43,15 +38,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { searchParams, pathname } = new URL(request.url)
+    const { id } = await params
+    const { searchParams } = new URL(request.url)
     const userId = searchParams.get("userId") || "default"
-    const pathId = pathname.split("/").pop() || ""
-    const id = (params as any)?.id ?? pathId
-    if (!id) {
-      return NextResponse.json({ error: "缺少角色ID" }, { status: 400 })
-    }
 
     const success = await localDB.deleteCharacter(id, userId)
 

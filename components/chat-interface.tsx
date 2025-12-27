@@ -170,15 +170,13 @@ export function ChatInterface() {
       if (result.success) {
         const bg = result.settings.chatBackground || ""
         setDefaultBackground(bg)
-        // 仅在当前角色未指定背景时，应用全局背景
-        if (!currentCharacter?.background) {
-          setChatBackground(bg)
-        }
+        // 不在这里设置 chatBackground，让应用背景 useEffect 统一处理
+        // 避免因闭包捕获旧值导致的竞态条件
       }
     } catch (error) {
       console.error("加载用户设置失败:", error)
     }
-  }, [userId, currentCharacter?.background])
+  }, [userId])
 
   useEffect(() => {
     const initializeData = async () => {
@@ -208,6 +206,9 @@ export function ChatInterface() {
         ? currentCharacter.background
         : defaultBackground
       setChatBackground(nextBg)
+    } else if (defaultBackground) {
+      // 如果没有选中角色但有全局背景，使用全局背景
+      setChatBackground(defaultBackground)
     }
   }, [currentCharacter?.id, currentCharacter?.background, defaultBackground])
 

@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import { useChat } from "@/hooks/use-chat"
 import { toast } from "@/hooks/use-toast"
 import { Loader2, Pencil, Trash2 } from "lucide-react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 interface Character {
@@ -40,6 +41,9 @@ interface Character {
 }
 
 export function ChatInterface() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(true)
@@ -148,8 +152,13 @@ export function ChatInterface() {
 
         setCharacters(charactersData)
 
+        // 优先从 URL 参数恢复角色选择
         if (!currentCharacter && charactersData.length > 0) {
-          setCurrentCharacter(charactersData[0])
+          const characterIdFromUrl = searchParams.get('character')
+          const targetCharacter = characterIdFromUrl
+            ? charactersData.find((c: Character) => c.id === characterIdFromUrl)
+            : null
+          setCurrentCharacter(targetCharacter || charactersData[0])
         }
       }
     } catch (error) {
@@ -160,7 +169,7 @@ export function ChatInterface() {
         variant: "destructive",
       })
     }
-  }, [currentCharacter, userId])
+  }, [currentCharacter, userId, searchParams])
 
   const loadUserSettings = useCallback(async () => {
     try {
@@ -198,6 +207,16 @@ export function ChatInterface() {
       loadMessages(currentCharacter.id)
     }
   }, [currentCharacter, loadMessages])
+
+  // 当角色切换时，更新 URL 参数
+  useEffect(() => {
+    if (currentCharacter && !isLoadingData) {
+      const currentUrlCharacterId = searchParams.get('character')
+      if (currentUrlCharacterId !== currentCharacter.id) {
+        router.replace(`?character=${currentCharacter.id}`, { scroll: false })
+      }
+    }
+  }, [currentCharacter, isLoadingData, router, searchParams])
 
   // 当切换角色或加载完成时，应用该角色的背景；若角色无背景，使用用户全局背景
   useEffect(() => {

@@ -7,6 +7,86 @@ import { Textarea } from "@/components/ui/textarea"
 import { ImagePlus, Loader2, Send, Sparkles, X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
+// 图片压缩阈值（3.5MB，留一些余量给base64编码增加的体积）
+const IMAGE_COMPRESS_THRESHOLD = 3.5 * 1024 * 1024
+
+// 压缩图片
+async function compressImage(file: File, maxSizeBytes: number = IMAGE_COMPRESS_THRESHOLD): Promise<File> {
+  // 如果图片已经足够小，直接返回
+  if (file.size <= maxSizeBytes) {
+    return file
+  }
+
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+
+    img.onload = async () => {
+      try {
+        let { width, height } = img
+        let quality = 0.9
+        let blob: Blob | null = null
+
+        // 如果图片尺寸过大，先缩小尺寸
+        const maxDimension = 2048
+        if (width > maxDimension || height > maxDimension) {
+          const ratio = Math.min(maxDimension / width, maxDimension / height)
+          width = Math.round(width * ratio)
+          height = Math.round(height * ratio)
+        }
+
+        canvas.width = width
+        canvas.height = height
+        ctx?.drawImage(img, 0, 0, width, height)
+
+        // 逐步降低质量直到文件大小满足要求
+        while (quality > 0.1) {
+          blob = await new Promise<Blob | null>((res) => {
+            canvas.toBlob(res, 'image/jpeg', quality)
+          })
+
+          if (blob && blob.size <= maxSizeBytes) {
+            break
+          }
+
+          // 如果还是太大，进一步缩小尺寸
+          if (quality <= 0.5 && blob && blob.size > maxSizeBytes) {
+            width = Math.round(width * 0.8)
+            height = Math.round(height * 0.8)
+            canvas.width = width
+            canvas.height = height
+            ctx?.drawImage(img, 0, 0, width, height)
+          }
+
+          quality -= 0.1
+        }
+
+        if (blob) {
+          const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+            type: 'image/jpeg',
+            lastModified: Date.now(),
+          })
+          console.log(`图片压缩: ${(file.size / 1024 / 1024).toFixed(2)}MB -> ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`)
+          resolve(compressedFile)
+        } else {
+          resolve(file)
+        }
+      } catch (error) {
+        console.error('图片压缩失败:', error)
+        resolve(file)
+      }
+    }
+
+    img.onerror = () => {
+      console.error('图片加载失败')
+      resolve(file)
+    }
+
+    img.src = URL.createObjectURL(file)
+  })
+}
+
 interface MessageInputProps {
   onSendMessage: (content: string, imageUrls?: string[]) => void
   disabled?: boolean
@@ -194,8 +274,11 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
           return null
         }
 
+        // 压缩大图片
+        const processedFile = await compressImage(file)
+
         const formData = new FormData()
-        formData.append("file", file)
+        formData.append("file", processedFile)
         formData.append("type", "chat")
 
         const response = await fetch("/api/upload", {

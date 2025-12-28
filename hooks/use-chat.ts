@@ -83,14 +83,17 @@ export function useChat({ userId, onError }: UseChatOptions) {
 
         setMessages((prev) => [...prev, tempAiMessage])
 
-        // 调用AI API
+        // 调用AI API - 只给最新消息传递图片，历史消息不传图片
+        const allMessages = messages.concat(userMessage)
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            messages: messages.concat(userMessage).map((msg) => ({
+            messages: allMessages.map((msg, index) => ({
               role: msg.sender === "user" ? "user" : "assistant",
               content: msg.content,
+              // 只有最后一条消息才传递图片
+              imageUrls: index === allMessages.length - 1 ? msg.imageUrls : undefined,
             })),
             character,
           }),

@@ -113,11 +113,17 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
-  // 自动聚焦到输入框
+  // 自动聚焦到输入框（当 disabled 从 true 变为 false 时）
+  const prevDisabledRef = useRef(disabled)
   useEffect(() => {
-    if (textareaRef.current && !disabled && !isMobile) {
-      textareaRef.current.focus()
+    // 检测 disabled 从 true 变为 false 的情况
+    if (prevDisabledRef.current && !disabled && !isMobile) {
+      // 使用 setTimeout 确保 DOM 已更新
+      setTimeout(() => {
+        textareaRef.current?.focus()
+      }, 50)
     }
+    prevDisabledRef.current = disabled
   }, [disabled, isMobile])
 
   // 页面加载完成后聚焦

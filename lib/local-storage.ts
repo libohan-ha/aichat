@@ -160,6 +160,15 @@ class JsonFileDB {
     return removed
   }
 
+  async deleteMessage(messageId: string): Promise<boolean> {
+    const db = await readDB()
+    const before = db.messages.length
+    db.messages = db.messages.filter((m) => m.id !== messageId)
+    const changed = db.messages.length !== before
+    if (changed) await writeDB(db)
+    return changed
+  }
+
   // User Settings
   async getUserSettings(userId = "default"): Promise<UserSettings> {
     const db = await readDB()

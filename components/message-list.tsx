@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/hooks/use-toast"
-import { Copy, Plus } from "lucide-react"
+import { Copy, Plus, RefreshCw } from "lucide-react"
 
 interface Message {
   id: string
@@ -34,6 +34,7 @@ interface MessageListProps {
   onLoadMore?: () => void
   hasMore?: boolean
   onNewConversation?: () => void
+  onRegenerate?: () => void
 }
 
 export function MessageList({
@@ -44,6 +45,7 @@ export function MessageList({
   onLoadMore,
   hasMore,
   onNewConversation,
+  onRegenerate,
 }: MessageListProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -154,9 +156,13 @@ export function MessageList({
         )}
 
         <div className="space-y-3 sm:space-y-4 max-w-4xl mx-auto">
-          {messages.map((message) => {
+          {messages.map((message, index) => {
             const character =
               message.sender === "ai" ? characters.find((c) => c.id === message.characterId) || currentCharacter : null
+
+            // 判断是否是最后一条AI消息
+            const isLastAiMessage = message.sender === "ai" &&
+              index === messages.findLastIndex(m => m.sender === "ai")
 
             return (
               <div
@@ -212,15 +218,28 @@ export function MessageList({
                         {message.content || ""}
                       </p>
 
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 sm:w-6 sm:h-6 p-0 touch-manipulation focus-visible"
-                        onClick={() => copyMessage(message.content || "")}
-                        title="复制消息"
-                      >
-                        <Copy className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                      </Button>
+                      <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                        {isLastAiMessage && onRegenerate && !isLoading && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-5 h-5 sm:w-6 sm:h-6 p-0 touch-manipulation focus-visible"
+                            onClick={onRegenerate}
+                            title="重新生成"
+                          >
+                            <RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-5 h-5 sm:w-6 sm:h-6 p-0 touch-manipulation focus-visible"
+                          onClick={() => copyMessage(message.content || "")}
+                          title="复制消息"
+                        >
+                          <Copy className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
 

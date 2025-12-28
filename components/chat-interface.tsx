@@ -63,7 +63,7 @@ export function ChatInterface() {
 
   const userId = "default" // 暂时使用默认用户ID
 
-  const { messages, isLoading, sendMessage, cancelCurrentRequest, loadMessages, clearConversation } = useChat({
+  const { messages, isLoading, sendMessage, cancelCurrentRequest, loadMessages, clearConversation, regenerateLastMessage } = useChat({
     userId,
     onError: (error) => {
       console.error("Chat error:", error)
@@ -680,6 +680,7 @@ export function ChatInterface() {
             currentCharacter={currentCharacter!}
             isLoading={isLoading}
             onNewConversation={handleNewChat}
+            onRegenerate={currentCharacter ? () => regenerateLastMessage(currentCharacter) : undefined}
           />
 
           <MessageInput

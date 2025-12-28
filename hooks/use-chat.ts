@@ -267,6 +267,173 @@ export function useChat({ userId, onError }: UseChatOptions) {
     [userId],
   )
 
+  // 重新生成最后一条AI回复
+  const regenerateLastMessage = useCallback(
+    async (character: Character) => {
+      if (isLoading) return
+
+      // 找到最后一条AI消息
+      const lastAiMessageIndex = messages.findLastIndex(msg => msg.sender === "ai")
+      if (lastAiMessageIndex === -1) {
+        toast({ title: "没有可重新生成的回复", variant: "destructive" })
+        return
+      }
+
+      // 找到这条AI消息之前的最后一条用户消息
+      const lastUserMessageIndex = messages.slice(0, lastAiMessageIndex).findLastIndex(msg => msg.sender === "user")
+      if (lastUserMessageIndex === -1) {
+        toast({ title: "找不到对应的用户消息", variant: "destructive" })
+        return
+      }
+
+      const lastUserMessage = messages[lastUserMessageIndex]
+      const lastAiMessage = messages[lastAiMessageIndex]
+
+      // 取消之前的请求
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+
+      const abortController = new AbortController()
+      abortControllerRef.current = abortController
+
+      try {
+        setIsLoading(true)
+
+        // 删除数据库中的旧AI回复
+        await fetch(`/api/messages/${lastAiMessage.id}`, {
+          method: "DELETE",
+          signal: abortController.signal,
+        })
+
+        // 清空当前AI消息内容，准备重新生成
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === lastAiMessage.id ? { ...msg, content: "" } : msg
+          )
+        )
+
+        // 准备历史消息（不包含被删除的AI回复）
+        const historyMessages = messages.slice(0, lastAiMessageIndex)
+
+        // 调用AI API
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: historyMessages.map((msg, index) => ({
+              role: msg.sender === "user" ? "user" : "assistant",
+              content: msg.content,
+              imageUrls: index === historyMessages.length - 1 ? msg.imageUrls : undefined,
+            })),
+            character,
+          }),
+          signal: abortController.signal,
+        })
+
+        if (!response.ok) {
+          throw new Error(`API调用失败: ${response.status}`)
+        }
+
+        // 处理流式响应
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
+        let accumulatedContent = ""
+        let buffer = ""
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+
+            let sepIndex
+            while ((sepIndex = buffer.indexOf("\n\n")) !== -1) {
+              const eventBlock = buffer.slice(0, sepIndex)
+              buffer = buffer.slice(sepIndex + 2)
+
+              const eventLines = eventBlock.split("\n")
+              for (const l of eventLines) {
+                const line = l.trim()
+                if (line.startsWith("data: ")) {
+                  const payload = line.slice(6)
+                  try {
+                    const data = JSON.parse(payload)
+                    if (data?.content) {
+                      accumulatedContent += data.content
+                      setMessages(prev =>
+                        prev.map(msg => (msg.id === lastAiMessage.id ? { ...msg, content: accumulatedContent } : msg)),
+                      )
+                    }
+                  } catch {
+                    // 忽略解析错误
+                  }
+                }
+              }
+            }
+          }
+
+          // 处理残留缓冲区
+          if (buffer.trim().length) {
+            const eventLines = buffer.split("\n")
+            for (const l of eventLines) {
+              const line = l.trim()
+              if (line.startsWith("data: ")) {
+                const payload = line.slice(6)
+                try {
+                  const data = JSON.parse(payload)
+                  if (data?.content) {
+                    accumulatedContent += data.content
+                    setMessages(prev =>
+                      prev.map(msg => (msg.id === lastAiMessage.id ? { ...msg, content: accumulatedContent } : msg)),
+                    )
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+            }
+          }
+        }
+
+        // 保存新的AI回复到数据库
+        if (accumulatedContent) {
+          await fetch("/api/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              content: accumulatedContent,
+              role: "assistant",
+              characterId: character.id,
+              userId,
+            }),
+            signal: abortController.signal,
+          })
+        }
+
+        toast({ title: "重新生成完成" })
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return
+        }
+
+        console.error("重新生成失败:", error)
+        toast({
+          title: "重新生成失败",
+          description: error instanceof Error ? error.message : "未知错误",
+          variant: "destructive",
+        })
+
+        onError?.(error instanceof Error ? error : new Error("重新生成失败"))
+      } finally {
+        setIsLoading(false)
+        abortControllerRef.current = null
+      }
+    },
+    [messages, isLoading, userId, onError],
+  )
+
   return {
     messages,
     isLoading,
@@ -275,5 +442,6 @@ export function useChat({ userId, onError }: UseChatOptions) {
     loadMessages,
     setMessages,
     clearConversation,
+    regenerateLastMessage,
   }
 }

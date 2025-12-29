@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button"
 import { useChat } from "@/hooks/use-chat"
 import { toast } from "@/hooks/use-toast"
 import { Loader2, Pencil, Trash2 } from "lucide-react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 interface Character {
@@ -86,6 +86,29 @@ export function ChatInterface() {
       return () => {
         window.visualViewport?.removeEventListener("resize", handleResize)
       }
+    }
+  }, [])
+
+  // 窗口大小变化时自动折叠/展开侧边栏
+  useEffect(() => {
+    const handleWindowResize = () => {
+      if (typeof window !== "undefined") {
+        // 当窗口宽度小于 1024px (lg breakpoint) 时自动折叠侧边栏
+        if (window.innerWidth < 1024) {
+          setSidebarCollapsed(true)
+        } else {
+          // 当窗口宽度大于等于 1024px 时自动展开侧边栏
+          setSidebarCollapsed(false)
+        }
+      }
+    }
+
+    // 初始检查
+    handleWindowResize()
+
+    window.addEventListener("resize", handleWindowResize)
+    return () => {
+      window.removeEventListener("resize", handleWindowResize)
     }
   }, [])
 

@@ -105,7 +105,9 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768 || "ontouchstart" in window)
+      // 只根据窗口宽度判断是否为移动端，不使用触摸屏检测
+      // 因为很多笔记本电脑也有触摸屏
+      setIsMobile(window.innerWidth < 768)
     }
 
     checkMobile()
@@ -113,15 +115,18 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
-  // 自动聚焦到输入框（当 disabled 从 true 变为 false 时）
+  // 自动聚焦到输入框（当 disabled 从 true 变为 false 时，即 AI 回复完成后）
   const prevDisabledRef = useRef(disabled)
   useEffect(() => {
-    // 检测 disabled 从 true 变为 false 的情况
-    if (prevDisabledRef.current && !disabled && !isMobile) {
-      // 使用 setTimeout 确保 DOM 已更新
+    // 检测 disabled 从 true 变为 false 的情况（AI 回复完成）
+    if (prevDisabledRef.current === true && disabled === false && !isMobile) {
+      // 使用 setTimeout 确保 DOM 已更新，延迟稍长一点确保可靠
       setTimeout(() => {
-        textareaRef.current?.focus()
-      }, 50)
+        if (textareaRef.current) {
+          textareaRef.current.focus()
+          console.log("AI回复完成，自动聚焦到输入框")
+        }
+      }, 100)
     }
     prevDisabledRef.current = disabled
   }, [disabled, isMobile])
@@ -216,23 +221,21 @@ export function MessageInput({ onSendMessage, disabled, placeholder = "输入消
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter") {
         const isCtrlOrCmd = e.ctrlKey || e.metaKey
-        if (isCtrlOrCmd) {
-          // Ctrl/Cmd + Enter: 发送
-          e.preventDefault()
-          handleSend()
-          return
-        }
 
         if (isMobile) {
           // 移动端：Enter键换行，需要点击发送按钮发送
           return
         }
 
-        // 桌面端默认：Enter 发送，Shift+Enter 换行
-        if (!e.shiftKey) {
-          e.preventDefault()
-          handleSend()
+        // 桌面端：Enter 发送，Ctrl/Cmd + Enter 换行
+        if (isCtrlOrCmd) {
+          // Ctrl/Cmd + Enter: 换行，不阻止默认行为
+          return
         }
+
+        // Enter: 发送消息
+        e.preventDefault()
+        handleSend()
       }
     },
     [handleSend, isMobile],

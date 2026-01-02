@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Character {
+  id                 Int       @id @default(autoincrement())
+  userId             String    @default("default") @map("user_id")
+  name               String
+  avatar             String    @default("/placeholder.svg")
+  prompt             String
+  background         String?
+  backgroundSize     String?   @default("cover") @map("background_size")
+  backgroundPosition String?   @default("center") @map("background_position")
+  backgroundRepeat   String?   @default("no-repeat") @map("background_repeat")
+  userAvatar         String?   @default("/placeholder-user.jpg") @map("user_avatar")
+  bubbleUserOpacity  Float?    @default(1) @map("bubble_user_opacity")
+  bubbleAiOpacity    Float?    @default(1) @map("bubble_ai_opacity")
+  model              String?   @default("deepseek-chat")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  messages Message[]
+
+  @@index([userId])
+  @@map("characters")
+}
+
+model Message {
+  id          Int       @id @default(autoincrement())
+  userId      String    @default("default") @map("user_id")
+  characterId Int       @map("character_id")
+  role        String
+  content     String
+  images      String[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@index([userId, characterId])
+  @@map("messages")
+}
+
+model UserSettings {
+  id                 Int      @id @default(autoincrement())
+  userId             String   @unique @default("default") @map("user_id")
+  chatBackground     String?  @default("") @map("chat_background")
+  currentCharacterId Int?     @map("current_character_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("user_settings")
+}

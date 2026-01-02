@@ -60,9 +60,14 @@ function convertLocalImageToBase64(imageUrl: string): string {
   }
 
   try {
-    // 处理相对路径（如 /uploads/xxx.jpg）
+    // 处理API路由路径（如 /api/uploads/xxx.jpg）和旧的静态路径（如 /uploads/xxx.jpg）
+    let relativePath = imageUrl
+    if (imageUrl.startsWith('/api/uploads/')) {
+      relativePath = imageUrl.replace('/api/uploads/', '/uploads/')
+    }
+    
     const publicDir = path.join(process.cwd(), 'public')
-    const imagePath = path.join(publicDir, imageUrl)
+    const imagePath = path.join(publicDir, relativePath)
 
     // 检查文件是否存在
     if (!fs.existsSync(imagePath)) {
@@ -143,42 +148,54 @@ export async function POST(request: NextRequest) {
     if (typeof chosenModel === "string" && isLocalApiModel(chosenModel)) {
       const localConfig = getLocalApiConfig()
       const localClient = new OpenAI({ apiKey: localConfig.apiKey, baseURL: localConfig.baseURL })
-      
-      const completion = await localClient.chat.completions.create({
-        model: chosenModel,
-        messages: [systemMessage, ...formattedMessages] as any,
-        stream: true,
-        temperature: 0.7,
-        max_tokens: 4096,
-      })
 
-      // 创建流式响应
-      const encoder = new TextEncoder()
-      const stream = new ReadableStream({
-        async start(controller) {
-          try {
-            for await (const chunk of completion) {
-              const content = chunk.choices[0]?.delta?.content || ""
-              if (content) {
-                const data = encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
-                controller.enqueue(data)
+      const requestMessages = [systemMessage, ...formattedMessages]
+      console.log("Local API Request:", JSON.stringify({ model: chosenModel, messageCount: requestMessages.length }, null, 2))
+
+      try {
+        const completion = await localClient.chat.completions.create({
+          model: chosenModel,
+          messages: requestMessages as any,
+          stream: true,
+          temperature: 0.7,
+          max_tokens: 4096,
+        })
+
+        // 创建流式响应
+        const encoder = new TextEncoder()
+        const stream = new ReadableStream({
+          async start(controller) {
+            try {
+              for await (const chunk of completion) {
+                const content = chunk.choices[0]?.delta?.content || ""
+                if (content) {
+                  const data = encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+                  controller.enqueue(data)
+                }
               }
+              controller.close()
+            } catch (error) {
+              console.error("Stream error:", error)
+              controller.error(error)
             }
-            controller.close()
-          } catch (error) {
-            console.error("Stream error:", error)
-            controller.error(error)
-          }
-        },
-      })
+          },
+        })
 
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-        },
-      })
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+          },
+        })
+      } catch (apiError: any) {
+        console.error("Local API Error Details:", {
+          status: apiError?.status,
+          message: apiError?.message,
+          error: apiError?.error,
+        })
+        throw apiError
+      }
     }
 
     // Default: DeepSeek-compatible OpenAI API

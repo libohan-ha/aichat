@@ -1,5 +1,10 @@
-import { existsSync, promises as fsp } from "fs"
-import { dirname, join } from "path"
+import { PrismaClient } from "@prisma/client"
+
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
+
+const prisma = globalForPrisma.prisma || new PrismaClient()
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
 
 export interface Character {
   id: string
@@ -39,166 +44,219 @@ export interface UserSettings {
   updatedAt: string
 }
 
-interface Database {
-  characters: Character[]
-  messages: Message[]
-  settings: Record<string, UserSettings>
-}
-
-const DATA_DIR = join(process.cwd(), ".data")
-const DB_PATH = join(DATA_DIR, "db.json")
-
-async function ensureDB(): Promise<void> {
-  if (!existsSync(DATA_DIR)) {
-    await fsp.mkdir(DATA_DIR, { recursive: true })
-  }
-  if (!existsSync(DB_PATH)) {
-    const initial: Database = { characters: [], messages: [], settings: {} }
-    await fsp.writeFile(DB_PATH, JSON.stringify(initial, null, 2), "utf-8")
-  }
-}
-
-async function readDB(): Promise<Database> {
-  await ensureDB()
-  const raw = await fsp.readFile(DB_PATH, "utf-8")
-  try {
-    const parsed = JSON.parse(raw)
-    return {
-      characters: Array.isArray(parsed.characters) ? parsed.characters : [],
-      messages: Array.isArray(parsed.messages) ? parsed.messages : [],
-      settings: parsed.settings && typeof parsed.settings === "object" ? parsed.settings : {},
-    }
-  } catch {
-    return { characters: [], messages: [], settings: {} }
-  }
-}
-
-async function writeDB(db: Database): Promise<void> {
-  const dir = dirname(DB_PATH)
-  if (!existsSync(dir)) await fsp.mkdir(dir, { recursive: true })
-  await fsp.writeFile(DB_PATH, JSON.stringify(db, null, 2), "utf-8")
-}
-
-class JsonFileDB {
+class PrismaDB {
   // Characters
   async getCharacters(userId = "default"): Promise<Character[]> {
-    const db = await readDB()
-    return db.characters.filter((c) => c.userId === userId)
+    const characters = await prisma.character.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+    })
+    return characters.map((c) => ({
+      id: c.id.toString(),
+      name: c.name,
+      avatar: c.avatar,
+      prompt: c.prompt,
+      userId: c.userId,
+      background: c.background || undefined,
+      backgroundSize: c.backgroundSize || undefined,
+      backgroundPosition: c.backgroundPosition || undefined,
+      backgroundRepeat: c.backgroundRepeat || undefined,
+      userAvatar: c.userAvatar || undefined,
+      bubbleUserOpacity: c.bubbleUserOpacity || undefined,
+      bubbleAiOpacity: c.bubbleAiOpacity || undefined,
+      model: c.model || undefined,
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+    }))
   }
 
   async createCharacter(character: Omit<Character, "id" | "createdAt" | "updatedAt">): Promise<Character> {
-    const db = await readDB()
-    const newCharacter: Character = {
-      ...character,
-      name: character.name || "未命名角色",
-      avatar: character.avatar || "/placeholder.svg",
-      prompt: character.prompt || "默认提示词",
-      background: character.background || "",
-      backgroundSize: character.backgroundSize || "cover",
-      backgroundPosition: character.backgroundPosition || "center",
-      backgroundRepeat: character.backgroundRepeat || "no-repeat",
-      userAvatar: (character as any).userAvatar || "/placeholder-user.jpg",
-      bubbleUserOpacity: (character as any).bubbleUserOpacity ?? 1,
-      bubbleAiOpacity: (character as any).bubbleAiOpacity ?? 1,
-      model: (character as any).model || process.env.DEEPSEEK_MODEL || "deepseek-chat",
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+    const created = await prisma.character.create({
+      data: {
+        name: character.name || "未命名角色",
+        avatar: character.avatar || "/placeholder.svg",
+        prompt: character.prompt || "默认提示词",
+        userId: character.userId || "default",
+        background: character.background || "",
+        backgroundSize: character.backgroundSize || "cover",
+        backgroundPosition: character.backgroundPosition || "center",
+        backgroundRepeat: character.backgroundRepeat || "no-repeat",
+        userAvatar: character.userAvatar || "/placeholder-user.jpg",
+        bubbleUserOpacity: character.bubbleUserOpacity ?? 1,
+        bubbleAiOpacity: character.bubbleAiOpacity ?? 1,
+        model: character.model || process.env.DEEPSEEK_MODEL || "deepseek-chat",
+      },
+    })
+    return {
+      id: created.id.toString(),
+      name: created.name,
+      avatar: created.avatar,
+      prompt: created.prompt,
+      userId: created.userId,
+      background: created.background || undefined,
+      backgroundSize: created.backgroundSize || undefined,
+      backgroundPosition: created.backgroundPosition || undefined,
+      backgroundRepeat: created.backgroundRepeat || undefined,
+      userAvatar: created.userAvatar || undefined,
+      bubbleUserOpacity: created.bubbleUserOpacity || undefined,
+      bubbleAiOpacity: created.bubbleAiOpacity || undefined,
+      model: created.model || undefined,
+      createdAt: created.createdAt.toISOString(),
+      updatedAt: created.updatedAt.toISOString(),
     }
-    db.characters.unshift(newCharacter)
-    await writeDB(db)
-    return newCharacter
   }
 
   async updateCharacter(id: string, updates: Partial<Character>, userId = "default"): Promise<Character | null> {
-    const db = await readDB()
-    const idx = db.characters.findIndex((c) => c.id === id && c.userId === userId)
-    if (idx === -1) return null
-    db.characters[idx] = { ...db.characters[idx], ...updates, updatedAt: new Date().toISOString() }
-    await writeDB(db)
-    return db.characters[idx]
+    const numId = parseInt(id)
+    const existing = await prisma.character.findFirst({
+      where: { id: numId, userId },
+    })
+    if (!existing) return null
+
+    const updated = await prisma.character.update({
+      where: { id: numId },
+      data: {
+        name: updates.name,
+        avatar: updates.avatar,
+        prompt: updates.prompt,
+        background: updates.background,
+        backgroundSize: updates.backgroundSize,
+        backgroundPosition: updates.backgroundPosition,
+        backgroundRepeat: updates.backgroundRepeat,
+        userAvatar: updates.userAvatar,
+        bubbleUserOpacity: updates.bubbleUserOpacity,
+        bubbleAiOpacity: updates.bubbleAiOpacity,
+        model: updates.model,
+      },
+    })
+    return {
+      id: updated.id.toString(),
+      name: updated.name,
+      avatar: updated.avatar,
+      prompt: updated.prompt,
+      userId: updated.userId,
+      background: updated.background || undefined,
+      backgroundSize: updated.backgroundSize || undefined,
+      backgroundPosition: updated.backgroundPosition || undefined,
+      backgroundRepeat: updated.backgroundRepeat || undefined,
+      userAvatar: updated.userAvatar || undefined,
+      bubbleUserOpacity: updated.bubbleUserOpacity || undefined,
+      bubbleAiOpacity: updated.bubbleAiOpacity || undefined,
+      model: updated.model || undefined,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    }
   }
 
   async deleteCharacter(id: string, userId = "default"): Promise<boolean> {
-    const db = await readDB()
-    const before = db.characters.length
-    db.characters = db.characters.filter((c) => !(c.id === id && c.userId === userId))
-    const changed = db.characters.length !== before
-    if (changed) await writeDB(db)
-    return changed
+    const numId = parseInt(id)
+    const existing = await prisma.character.findFirst({
+      where: { id: numId, userId },
+    })
+    if (!existing) return false
+
+    await prisma.character.delete({ where: { id: numId } })
+    return true
   }
 
   // Messages
   async getMessages(userId = "default", characterId: string, limit = 50): Promise<Message[]> {
-    const db = await readDB()
-    return db.messages
-      .filter((m) => m.userId === userId && m.characterId === characterId)
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-      .slice(-limit)
+    const messages = await prisma.message.findMany({
+      where: { userId, characterId: parseInt(characterId) },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+    })
+    return messages.map((m) => ({
+      id: m.id.toString(),
+      content: m.content,
+      role: m.role as "user" | "assistant",
+      characterId: m.characterId.toString(),
+      userId: m.userId,
+      images: m.images.length > 0 ? m.images : undefined,
+      createdAt: m.createdAt.toISOString(),
+      updatedAt: m.updatedAt.toISOString(),
+    }))
   }
 
   async createMessage(message: Omit<Message, "id" | "createdAt" | "updatedAt">): Promise<Message> {
-    const db = await readDB()
-    const newMessage: Message = {
-      ...message,
-      content: message.content || "",
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+    const created = await prisma.message.create({
+      data: {
+        content: message.content || "",
+        role: message.role,
+        characterId: parseInt(message.characterId),
+        userId: message.userId || "default",
+        images: message.images || [],
+      },
+    })
+    return {
+      id: created.id.toString(),
+      content: created.content,
+      role: created.role as "user" | "assistant",
+      characterId: created.characterId.toString(),
+      userId: created.userId,
+      images: created.images.length > 0 ? created.images : undefined,
+      createdAt: created.createdAt.toISOString(),
+      updatedAt: created.updatedAt.toISOString(),
     }
-    db.messages.push(newMessage)
-    await writeDB(db)
-    return newMessage
   }
 
   async clearMessages(userId = "default", characterId: string): Promise<number> {
-    const db = await readDB()
-    const before = db.messages.length
-    db.messages = db.messages.filter((m) => !(m.userId === userId && m.characterId === characterId))
-    const removed = before - db.messages.length
-    if (removed > 0) await writeDB(db)
-    return removed
+    const result = await prisma.message.deleteMany({
+      where: { userId, characterId: parseInt(characterId) },
+    })
+    return result.count
   }
 
   async deleteMessage(messageId: string): Promise<boolean> {
-    const db = await readDB()
-    const before = db.messages.length
-    db.messages = db.messages.filter((m) => m.id !== messageId)
-    const changed = db.messages.length !== before
-    if (changed) await writeDB(db)
-    return changed
+    try {
+      await prisma.message.delete({ where: { id: parseInt(messageId) } })
+      return true
+    } catch {
+      return false
+    }
   }
 
   // User Settings
   async getUserSettings(userId = "default"): Promise<UserSettings> {
-    const db = await readDB()
-    const existing = db.settings[userId]
-    if (existing) return existing
-    const defaults: UserSettings = {
-      id: userId,
-      userId,
-      chatBackground: "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+    let settings = await prisma.userSettings.findUnique({
+      where: { userId },
+    })
+    if (!settings) {
+      settings = await prisma.userSettings.create({
+        data: { userId, chatBackground: "" },
+      })
     }
-    db.settings[userId] = defaults
-    await writeDB(db)
-    return defaults
+    return {
+      id: settings.id.toString(),
+      userId: settings.userId,
+      chatBackground: settings.chatBackground || "",
+      currentCharacterId: settings.currentCharacterId?.toString(),
+      createdAt: settings.createdAt.toISOString(),
+      updatedAt: settings.updatedAt.toISOString(),
+    }
   }
 
   async updateUserSettings(userId = "default", updates: Partial<UserSettings>): Promise<UserSettings> {
-    const db = await readDB()
-    const current = db.settings[userId] || {
-      id: userId,
-      userId,
-      chatBackground: "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+    const settings = await prisma.userSettings.upsert({
+      where: { userId },
+      update: {
+        chatBackground: updates.chatBackground,
+        currentCharacterId: updates.currentCharacterId ? parseInt(updates.currentCharacterId) : null,
+      },
+      create: {
+        userId,
+        chatBackground: updates.chatBackground || "",
+        currentCharacterId: updates.currentCharacterId ? parseInt(updates.currentCharacterId) : null,
+      },
+    })
+    return {
+      id: settings.id.toString(),
+      userId: settings.userId,
+      chatBackground: settings.chatBackground || "",
+      currentCharacterId: settings.currentCharacterId?.toString(),
+      createdAt: settings.createdAt.toISOString(),
+      updatedAt: settings.updatedAt.toISOString(),
     }
-    const updated: UserSettings = { ...current, ...updates, updatedAt: new Date().toISOString() }
-    db.settings[userId] = updated
-    await writeDB(db)
-    return updated
   }
 
   // Initialize with default characters if none exist
@@ -223,4 +281,4 @@ class JsonFileDB {
   }
 }
 
-export const localDB = new JsonFileDB()
+export const localDB = new PrismaDB()

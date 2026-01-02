@@ -49,8 +49,8 @@ export async function POST(request: NextRequest) {
     const filepath = join(uploadDir, filename)
     await writeFile(filepath, buffer)
 
-    // 返回文件URL
-    const fileUrl = `/uploads/${filename}`
+    // 返回文件URL（使用API路由服务图片，确保生产环境可访问）
+    const fileUrl = `/api/uploads/${filename}`
 
     return NextResponse.json({
       success: true,

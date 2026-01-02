@@ -45,6 +45,7 @@ export function CharacterDialog({ open, onOpenChange, character, onSave, mode }:
   const [background, setBackground] = useState(character?.background || "")
   const [model, setModel] = useState(character?.model || "deepseek-chat")
   const [isUploading, setIsUploading] = useState(false)
+  const [isUploadingBackground, setIsUploadingBackground] = useState(false)
 
   // 同步外部传入的角色到本地状态：当对话框打开或切换角色时预填表单
   // 之前只在初次挂载时取初值，导致编辑时是空的
@@ -87,6 +88,36 @@ export function CharacterDialog({ open, onOpenChange, character, onSave, mode }:
       console.error("上传错误:", error)
     } finally {
       setIsUploading(false)
+    }
+  }
+
+  const handleBackgroundChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsUploadingBackground(true)
+
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("type", "background")
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setBackground(`url(${result.url})`)
+      } else {
+        console.error("上传失败:", result.error)
+      }
+    } catch (error) {
+      console.error("上传错误:", error)
+    } finally {
+      setIsUploadingBackground(false)
     }
   }
 
@@ -291,15 +322,52 @@ export function CharacterDialog({ open, onOpenChange, character, onSave, mode }:
 
           {/* 背景（可选） */}
           <div className="space-y-2">
-            <Label htmlFor="background" className="text-sm font-medium">
-              聊天背景（可选）
-            </Label>
-            <Input
-              id="background"
-              value={background}
-              onChange={(e) => setBackground(e.target.value)}
-              placeholder="例如 url(/uploads/bg.png) 或 linear-gradient(...)"
-            />
+            <Label className="text-sm font-medium">聊天背景（可选）</Label>
+            <div className="flex flex-col space-y-2">
+              <Label htmlFor="character-background-upload" className="cursor-pointer">
+                <div className="flex items-center space-x-2 text-sm text-muted-foreground hover:text-foreground transition-colors p-2 rounded-md border border-dashed border-border hover:border-primary">
+                  {isUploadingBackground ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>上传中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4" />
+                      <span>点击上传背景图片</span>
+                    </>
+                  )}
+                </div>
+              </Label>
+              <Input
+                id="character-background-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleBackgroundChange}
+                disabled={isUploadingBackground}
+              />
+              {background && (
+                <div className="flex items-center space-x-2">
+                  <Input
+                    value={background}
+                    onChange={(e) => setBackground(e.target.value)}
+                    placeholder="例如 url(/uploads/bg.png) 或 linear-gradient(...)"
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-2 text-xs touch-manipulation"
+                    onClick={() => setBackground("")}
+                    disabled={isUploadingBackground}
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    移除
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

@@ -29,8 +29,19 @@ export interface Message {
   content: string
   role: "user" | "assistant"
   characterId: string
+  conversationId?: string
   userId: string
   images?: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Conversation {
+  id: string
+  userId: string
+  characterId: string
+  title: string
+  messageCount?: number
   createdAt: string
   updatedAt: string
 }
@@ -159,10 +170,89 @@ class PrismaDB {
     return true
   }
 
-  // Messages
-  async getMessages(userId = "default", characterId: string, limit = 50): Promise<Message[]> {
-    const messages = await prisma.message.findMany({
+  // Conversations
+  async getConversations(userId = "default", characterId: string): Promise<Conversation[]> {
+    const conversations = await prisma.conversation.findMany({
       where: { userId, characterId: parseInt(characterId) },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        _count: {
+          select: { messages: true }
+        }
+      }
+    })
+    return conversations.map((c) => ({
+      id: c.id.toString(),
+      userId: c.userId,
+      characterId: c.characterId.toString(),
+      title: c.title,
+      messageCount: c._count.messages,
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+    }))
+  }
+
+  async createConversation(userId = "default", characterId: string, title = "新对话"): Promise<Conversation> {
+    const created = await prisma.conversation.create({
+      data: {
+        userId,
+        characterId: parseInt(characterId),
+        title,
+      },
+    })
+    return {
+      id: created.id.toString(),
+      userId: created.userId,
+      characterId: created.characterId.toString(),
+      title: created.title,
+      messageCount: 0,
+      createdAt: created.createdAt.toISOString(),
+      updatedAt: created.updatedAt.toISOString(),
+    }
+  }
+
+  async updateConversation(conversationId: string, updates: { title?: string }): Promise<Conversation | null> {
+    try {
+      const updated = await prisma.conversation.update({
+        where: { id: parseInt(conversationId) },
+        data: { title: updates.title },
+        include: {
+          _count: {
+            select: { messages: true }
+          }
+        }
+      })
+      return {
+        id: updated.id.toString(),
+        userId: updated.userId,
+        characterId: updated.characterId.toString(),
+        title: updated.title,
+        messageCount: updated._count.messages,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString(),
+      }
+    } catch {
+      return null
+    }
+  }
+
+  async deleteConversation(conversationId: string): Promise<boolean> {
+    try {
+      await prisma.conversation.delete({ where: { id: parseInt(conversationId) } })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  // Messages
+  async getMessages(userId = "default", characterId: string, conversationId?: string, limit = 50): Promise<Message[]> {
+    const messages = await prisma.message.findMany({
+      where: {
+        userId,
+        characterId: parseInt(characterId),
+        conversationId: conversationId ? parseInt(conversationId) : undefined,
+      },
       orderBy: { createdAt: "asc" },
       take: limit,
     })
@@ -171,6 +261,7 @@ class PrismaDB {
       content: m.content,
       role: m.role as "user" | "assistant",
       characterId: m.characterId.toString(),
+      conversationId: m.conversationId?.toString(),
       userId: m.userId,
       images: m.images.length > 0 ? m.images : undefined,
       createdAt: m.createdAt.toISOString(),
@@ -184,15 +275,26 @@ class PrismaDB {
         content: message.content || "",
         role: message.role,
         characterId: parseInt(message.characterId),
+        conversationId: message.conversationId ? parseInt(message.conversationId) : undefined,
         userId: message.userId || "default",
         images: message.images || [],
       },
     })
+    
+    // 更新对话的 updatedAt 时间
+    if (message.conversationId) {
+      await prisma.conversation.update({
+        where: { id: parseInt(message.conversationId) },
+        data: { updatedAt: new Date() },
+      })
+    }
+    
     return {
       id: created.id.toString(),
       content: created.content,
       role: created.role as "user" | "assistant",
       characterId: created.characterId.toString(),
+      conversationId: created.conversationId?.toString(),
       userId: created.userId,
       images: created.images.length > 0 ? created.images : undefined,
       createdAt: created.createdAt.toISOString(),
@@ -200,9 +302,13 @@ class PrismaDB {
     }
   }
 
-  async clearMessages(userId = "default", characterId: string): Promise<number> {
+  async clearMessages(userId = "default", characterId: string, conversationId?: string): Promise<number> {
     const result = await prisma.message.deleteMany({
-      where: { userId, characterId: parseInt(characterId) },
+      where: {
+        userId,
+        characterId: parseInt(characterId),
+        conversationId: conversationId ? parseInt(conversationId) : undefined,
+      },
     })
     return result.count
   }

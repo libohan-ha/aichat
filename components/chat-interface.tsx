@@ -2,6 +2,7 @@
 import { BackgroundSettings } from "@/components/background-settings"
 import { CharacterDialog } from "@/components/character-dialog"
 import { CharacterSidebar } from "@/components/character-sidebar"
+import { ConversationHistory } from "@/components/conversation-history"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts"
 import { MessageInput } from "@/components/message-input"
@@ -21,7 +22,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { useChat } from "@/hooks/use-chat"
 import { toast } from "@/hooks/use-toast"
-import { Loader2, Pencil, Trash2 } from "lucide-react"
+import { Clock, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
@@ -62,8 +63,24 @@ export function ChatInterface() {
   const [characters, setCharacters] = useState<Character[]>([])
 
   const userId = "default" // 暂时使用默认用户ID
+  const [conversationHistoryOpen, setConversationHistoryOpen] = useState(false)
 
-  const { messages, isLoading, sendMessage, cancelCurrentRequest, loadMessages, clearConversation, regenerateLastMessage } = useChat({
+  const {
+    messages,
+    isLoading,
+    conversations,
+    currentConversationId,
+    sendMessage,
+    cancelCurrentRequest,
+    loadMessages,
+    clearConversation,
+    regenerateLastMessage,
+    loadConversations,
+    createConversation,
+    deleteConversation,
+    switchConversation,
+    startNewConversation,
+  } = useChat({
     userId,
     onError: (error) => {
       console.error("Chat error:", error)
@@ -225,11 +242,21 @@ export function ChatInterface() {
     initializeData()
   }, [loadCharacters, loadUserSettings])
 
+  // 当角色切换时，加载对话列表和消息
   useEffect(() => {
     if (currentCharacter) {
-      loadMessages(currentCharacter.id)
+      // 加载对话列表
+      loadConversations(currentCharacter.id).then((convs) => {
+        if (convs && convs.length > 0) {
+          // 切换到最新的对话
+          switchConversation(convs[0].id, currentCharacter.id)
+        } else {
+          // 没有对话，创建一个新对话
+          createConversation(currentCharacter.id)
+        }
+      })
     }
-  }, [currentCharacter, loadMessages])
+  }, [currentCharacter?.id])
 
   // 当角色切换时，更新 URL 参数
   useEffect(() => {
@@ -538,10 +565,32 @@ export function ChatInterface() {
 
   const handleNewChat = useCallback(async () => {
     if (currentCharacter) {
-      await clearConversation(currentCharacter.id)
+      await startNewConversation(currentCharacter.id)
       toast({ title: "已开始新对话" })
     }
-  }, [currentCharacter, clearConversation])
+  }, [currentCharacter, startNewConversation])
+
+  const handleSelectConversation = useCallback(async (conversationId: string) => {
+    if (currentCharacter) {
+      await switchConversation(conversationId, currentCharacter.id)
+    }
+  }, [currentCharacter, switchConversation])
+
+  const handleDeleteConversation = useCallback(async (conversationId: string) => {
+    const deleted = await deleteConversation(conversationId)
+    if (deleted) {
+      toast({ title: "对话已删除" })
+      // 如果删除的是当前对话，加载对话列表并切换到最新的或创建新对话
+      if (currentConversationId === conversationId && currentCharacter) {
+        const convs = await loadConversations(currentCharacter.id)
+        if (convs && convs.length > 0) {
+          await switchConversation(convs[0].id, currentCharacter.id)
+        } else {
+          await createConversation(currentCharacter.id)
+        }
+      }
+    }
+  }, [deleteConversation, currentConversationId, currentCharacter, loadConversations, switchConversation, createConversation])
 
   const chatStyle = useMemo(
     () => ({
@@ -659,9 +708,34 @@ export function ChatInterface() {
                 </>
               )}
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1 sm:space-x-2">
               {currentCharacter && (
                 <>
+                  {/* 历史对话按钮 */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConversationHistoryOpen(true)}
+                    className="h-8 px-2 sm:px-3 text-xs sm:text-sm"
+                    title="历史对话"
+                  >
+                    <Clock className="h-4 w-4 mr-1" />
+                    <span className="hidden sm:inline">历史对话</span>
+                    {conversations.length > 0 && (
+                      <span className="ml-1 text-muted-foreground">({conversations.length})</span>
+                    )}
+                  </Button>
+                  {/* 新建对话按钮 */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleNewChat}
+                    className="h-8 px-2 sm:px-3 text-xs sm:text-sm"
+                    title="新建对话"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    <span className="hidden sm:inline">新建对话</span>
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -760,6 +834,17 @@ export function ChatInterface() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* 历史对话侧边栏 */}
+        <ConversationHistory
+          conversations={conversations}
+          currentConversationId={currentConversationId}
+          isOpen={conversationHistoryOpen}
+          onClose={() => setConversationHistoryOpen(false)}
+          onNewConversation={handleNewChat}
+          onSelectConversation={handleSelectConversation}
+          onDeleteConversation={handleDeleteConversation}
+        />
       </div>
     </ErrorBoundary>
   )

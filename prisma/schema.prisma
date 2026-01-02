@@ -8,41 +8,60 @@ datasource db {
 }
 
 model Character {
-  id                 Int       @id @default(autoincrement())
-  userId             String    @default("default") @map("user_id")
+  id                 Int            @id @default(autoincrement())
+  userId             String         @default("default") @map("user_id")
   name               String
-  avatar             String    @default("/placeholder.svg")
+  avatar             String         @default("/placeholder.svg")
   prompt             String
   background         String?
-  backgroundSize     String?   @default("cover") @map("background_size")
-  backgroundPosition String?   @default("center") @map("background_position")
-  backgroundRepeat   String?   @default("no-repeat") @map("background_repeat")
-  userAvatar         String?   @default("/placeholder-user.jpg") @map("user_avatar")
-  bubbleUserOpacity  Float?    @default(1) @map("bubble_user_opacity")
-  bubbleAiOpacity    Float?    @default(1) @map("bubble_ai_opacity")
-  model              String?   @default("deepseek-chat")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
+  backgroundSize     String?        @default("cover") @map("background_size")
+  backgroundPosition String?        @default("center") @map("background_position")
+  backgroundRepeat   String?        @default("no-repeat") @map("background_repeat")
+  userAvatar         String?        @default("/placeholder-user.jpg") @map("user_avatar")
+  bubbleUserOpacity  Float?         @default(1) @map("bubble_user_opacity")
+  bubbleAiOpacity    Float?         @default(1) @map("bubble_ai_opacity")
+  model              String?        @default("deepseek-chat")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
 
-  messages Message[]
+  messages      Message[]
+  conversations Conversation[]
 
   @@index([userId])
   @@map("characters")
 }
 
-model Message {
+model Conversation {
   id          Int       @id @default(autoincrement())
   userId      String    @default("default") @map("user_id")
   characterId Int       @map("character_id")
-  role        String
-  content     String
-  images      String[]
+  title       String    @default("新对话")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  messages  Message[]
 
   @@index([userId, characterId])
+  @@map("conversations")
+}
+
+model Message {
+  id             Int           @id @default(autoincrement())
+  userId         String        @default("default") @map("user_id")
+  characterId    Int           @map("character_id")
+  conversationId Int?          @map("conversation_id")
+  role           String
+  content        String
+  images         String[]
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  character    Character     @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, characterId])
+  @@index([conversationId])
   @@map("messages")
 }
 

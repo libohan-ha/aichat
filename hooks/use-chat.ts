@@ -9,6 +9,7 @@ interface Message {
   sender: "user" | "ai"
   timestamp: Date
   characterId?: string
+  conversationId?: string
   imageUrls?: string[]
 }
 
@@ -20,6 +21,16 @@ interface Character {
   model?: string
 }
 
+interface Conversation {
+  id: string
+  userId: string
+  characterId: string
+  title: string
+  messageCount?: number
+  createdAt: string
+  updatedAt: string
+}
+
 interface UseChatOptions {
   userId: string
   onError?: (error: Error) => void
@@ -28,12 +39,16 @@ interface UseChatOptions {
 export function useChat({ userId, onError }: UseChatOptions) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const sendMessage = useCallback(
-    async (content: string, character: Character, imageUrls?: string[]) => {
+    async (content: string, character: Character, imageUrls?: string[], conversationId?: string) => {
       if (!content.trim() && (!imageUrls || imageUrls.length === 0)) return
       if (isLoading) return
+
+      const activeConversationId = conversationId || currentConversationId
 
       // 取消之前的请求
       if (abortControllerRef.current) {
@@ -51,6 +66,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
           sender: "user",
           timestamp: new Date(),
           characterId: character.id,
+          conversationId: activeConversationId || undefined,
           imageUrls,
         }
 
@@ -65,6 +81,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
             content: userMessage.content,
             role: "user",
             characterId: character.id,
+            conversationId: activeConversationId,
             userId,
             images: imageUrls,
           }),
@@ -176,6 +193,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
               content: accumulatedContent,
               role: "assistant",
               characterId: character.id,
+              conversationId: activeConversationId,
               userId,
             }),
             signal: abortController.signal,
@@ -215,7 +233,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
         abortControllerRef.current = null
       }
     },
-    [messages, isLoading, userId, onError],
+    [messages, isLoading, userId, currentConversationId, onError],
   )
 
   const cancelCurrentRequest = useCallback(() => {
@@ -225,10 +243,127 @@ export function useChat({ userId, onError }: UseChatOptions) {
     }
   }, [])
 
-  const loadMessages = useCallback(
+  // 加载对话列表
+  const loadConversations = useCallback(
     async (characterId: string) => {
       try {
-        const response = await fetch(`/api/messages?userId=${userId}&characterId=${characterId}`)
+        const response = await fetch(`/api/conversations?userId=${userId}&characterId=${characterId}`)
+        const result = await response.json()
+
+        if (result.success) {
+          setConversations(result.conversations)
+          return result.conversations as Conversation[]
+        }
+        return []
+      } catch (error) {
+        console.error("加载对话列表失败:", error)
+        return []
+      }
+    },
+    [userId],
+  )
+
+  // 创建新对话
+  const createConversation = useCallback(
+    async (characterId: string, title = "新对话") => {
+      try {
+        const response = await fetch("/api/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ characterId, userId, title }),
+        })
+        const result = await response.json()
+
+        if (result.success) {
+          const newConversation = result.conversation as Conversation
+          setConversations((prev) => [newConversation, ...prev])
+          setCurrentConversationId(newConversation.id)
+          setMessages([])
+          return newConversation
+        }
+        return null
+      } catch (error) {
+        console.error("创建对话失败:", error)
+        toast({ title: "创建对话失败", variant: "destructive" })
+        return null
+      }
+    },
+    [userId],
+  )
+
+  // 删除对话
+  const deleteConversation = useCallback(
+    async (conversationId: string) => {
+      try {
+        const response = await fetch(`/api/conversations/${conversationId}`, {
+          method: "DELETE",
+        })
+
+        if (response.ok) {
+          setConversations((prev) => prev.filter((c) => c.id !== conversationId))
+          if (currentConversationId === conversationId) {
+            setCurrentConversationId(null)
+            setMessages([])
+          }
+          return true
+        }
+        return false
+      } catch (error) {
+        console.error("删除对话失败:", error)
+        toast({ title: "删除对话失败", variant: "destructive" })
+        return false
+      }
+    },
+    [currentConversationId],
+  )
+
+  // 切换对话
+  const switchConversation = useCallback(
+    async (conversationId: string | null, characterId: string) => {
+      setCurrentConversationId(conversationId)
+      if (conversationId) {
+        // 加载指定对话的消息
+        try {
+          const response = await fetch(
+            `/api/messages?userId=${userId}&characterId=${characterId}&conversationId=${conversationId}`
+          )
+          const result = await response.json()
+
+          if (result.success) {
+            const messagesData = result.messages.map((msg: any) => ({
+              id: msg.id,
+              content: msg.content,
+              sender: msg.role === "user" ? "user" : "ai",
+              timestamp: new Date(msg.timestamp),
+              characterId: msg.characterId,
+              conversationId: msg.conversationId,
+              imageUrls: msg.images,
+            }))
+            setMessages(messagesData)
+          }
+        } catch (error) {
+          console.error("加载对话消息失败:", error)
+          toast({
+            title: "加载失败",
+            description: "无法加载对话消息",
+            variant: "destructive",
+          })
+        }
+      } else {
+        setMessages([])
+      }
+    },
+    [userId],
+  )
+
+  const loadMessages = useCallback(
+    async (characterId: string, conversationId?: string) => {
+      try {
+        let url = `/api/messages?userId=${userId}&characterId=${characterId}`
+        if (conversationId) {
+          url += `&conversationId=${conversationId}`
+        }
+        const response = await fetch(url)
         const result = await response.json()
 
         if (result.success) {
@@ -238,6 +373,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
             sender: msg.role === "user" ? "user" : "ai",
             timestamp: new Date(msg.timestamp),
             characterId: msg.characterId,
+            conversationId: msg.conversationId,
             imageUrls: msg.images,
           }))
           setMessages(messagesData)
@@ -254,17 +390,21 @@ export function useChat({ userId, onError }: UseChatOptions) {
     [userId],
   )
 
+  // 新建对话（清空当前对话并创建新对话）
+  const startNewConversation = useCallback(
+    async (characterId: string) => {
+      const newConversation = await createConversation(characterId)
+      return newConversation
+    },
+    [createConversation],
+  )
+
+  // 兼容旧的 clearConversation（改为新建对话）
   const clearConversation = useCallback(
     async (characterId: string) => {
-      try {
-        await fetch(`/api/messages?userId=${userId}&characterId=${characterId}`, { method: "DELETE" })
-        setMessages([])
-      } catch (error) {
-        console.error("清空对话失败:", error)
-        toast({ title: "清空失败", variant: "destructive" })
-      }
+      await startNewConversation(characterId)
     },
-    [userId],
+    [startNewConversation],
   )
 
   // 重新生成最后一条AI回复
@@ -406,6 +546,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
               content: accumulatedContent,
               role: "assistant",
               characterId: character.id,
+              conversationId: currentConversationId,
               userId,
             }),
             signal: abortController.signal,
@@ -431,17 +572,26 @@ export function useChat({ userId, onError }: UseChatOptions) {
         abortControllerRef.current = null
       }
     },
-    [messages, isLoading, userId, onError],
+    [messages, isLoading, userId, currentConversationId, onError],
   )
 
   return {
     messages,
     isLoading,
+    conversations,
+    currentConversationId,
     sendMessage,
     cancelCurrentRequest,
     loadMessages,
     setMessages,
     clearConversation,
     regenerateLastMessage,
+    // 新增对话管理方法
+    loadConversations,
+    createConversation,
+    deleteConversation,
+    switchConversation,
+    startNewConversation,
+    setCurrentConversationId,
   }
 }

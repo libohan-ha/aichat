@@ -1,19 +1,20 @@
 "use client"
 
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Clock, Plus, Trash2, X } from "lucide-react"
-import { useState } from "react"
+import { Check, Clock, Pencil, Plus, Trash2, X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 
 interface Conversation {
   id: string
@@ -33,6 +34,7 @@ interface ConversationHistoryProps {
   onNewConversation: () => void
   onSelectConversation: (conversationId: string) => void
   onDeleteConversation: (conversationId: string) => void
+  onUpdateConversationTitle: (conversationId: string, title: string) => Promise<boolean>
 }
 
 export function ConversationHistory({
@@ -43,9 +45,21 @@ export function ConversationHistory({
   onNewConversation,
   onSelectConversation,
   onDeleteConversation,
+  onUpdateConversationTitle,
 }: ConversationHistoryProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState("")
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // 当开始编辑时，聚焦输入框
+  useEffect(() => {
+    if (editingId && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [editingId])
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString)
@@ -74,6 +88,40 @@ export function ConversationHistory({
     }
     setDeleteDialogOpen(false)
     setConversationToDelete(null)
+  }
+
+  const handleEditClick = (e: React.MouseEvent, conversation: Conversation) => {
+    e.stopPropagation()
+    setEditingId(conversation.id)
+    setEditingTitle(conversation.title)
+  }
+
+  const handleSaveTitle = async (e: React.MouseEvent | React.FormEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    if (editingId && editingTitle.trim()) {
+      const success = await onUpdateConversationTitle(editingId, editingTitle.trim())
+      if (success) {
+        setEditingId(null)
+        setEditingTitle("")
+      }
+    }
+  }
+
+  const handleCancelEdit = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingId(null)
+    setEditingTitle("")
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      handleSaveTitle(e as unknown as React.MouseEvent)
+    } else if (e.key === "Escape") {
+      setEditingId(null)
+      setEditingTitle("")
+    }
   }
 
   if (!isOpen) return null
@@ -129,8 +177,10 @@ export function ConversationHistory({
                 <div
                   key={conversation.id}
                   onClick={() => {
-                    onSelectConversation(conversation.id)
-                    onClose()
+                    if (editingId !== conversation.id) {
+                      onSelectConversation(conversation.id)
+                      onClose()
+                    }
                   }}
                   className={`group relative p-3 rounded-lg cursor-pointer transition-colors ${
                     currentConversationId === conversation.id
@@ -140,7 +190,39 @@ export function ConversationHistory({
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium truncate">{conversation.title}</h3>
+                      {editingId === conversation.id ? (
+                        <form onSubmit={handleSaveTitle} className="flex items-center gap-1">
+                          <Input
+                            ref={inputRef}
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-7 text-sm"
+                            placeholder="输入对话名称"
+                          />
+                          <Button
+                            type="submit"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-green-600 hover:text-green-700"
+                            onClick={handleSaveTitle}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={handleCancelEdit}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </form>
+                      ) : (
+                        <h3 className="font-medium truncate">{conversation.title}</h3>
+                      )}
                       <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                         <span>{formatTime(conversation.updatedAt)}</span>
                         {conversation.messageCount !== undefined && conversation.messageCount > 0 && (
@@ -150,14 +232,28 @@ export function ConversationHistory({
                         )}
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                      onClick={(e) => handleDeleteClick(e, conversation.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {editingId !== conversation.id && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                          onClick={(e) => handleEditClick(e, conversation)}
+                          title="编辑名称"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          onClick={(e) => handleDeleteClick(e, conversation.id)}
+                          title="删除对话"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))

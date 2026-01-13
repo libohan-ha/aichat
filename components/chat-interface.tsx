@@ -77,6 +77,7 @@ export function ChatInterface() {
     regenerateLastMessage,
     loadConversations,
     createConversation,
+    updateConversationTitle,
     deleteConversation,
     switchConversation,
     startNewConversation,
@@ -592,6 +593,14 @@ export function ChatInterface() {
     }
   }, [deleteConversation, currentConversationId, currentCharacter, loadConversations, switchConversation, createConversation])
 
+  const handleUpdateConversationTitle = useCallback(async (conversationId: string, title: string) => {
+    const success = await updateConversationTitle(conversationId, title)
+    if (success) {
+      toast({ title: "对话名称已更新" })
+    }
+    return success
+  }, [updateConversationTitle])
+
   const chatStyle = useMemo(
     () => ({
       backgroundColor: "var(--background)",
@@ -844,6 +853,7 @@ export function ChatInterface() {
           onNewConversation={handleNewChat}
           onSelectConversation={handleSelectConversation}
           onDeleteConversation={handleDeleteConversation}
+          onUpdateConversationTitle={handleUpdateConversationTitle}
         />
       </div>
     </ErrorBoundary>

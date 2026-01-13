@@ -298,6 +298,7 @@ export function CharacterDialog({ open, onOpenChange, character, onSave, mode }:
               <SelectContent>
                 <SelectItem value="deepseek-chat">deepseek-chat（通用）</SelectItem>
                 <SelectItem value="deepseek-reasoner">deepseek-reasoner（更强推理）</SelectItem>
+                <SelectItem value="qwen3-max">qwen3-max（通义千问）</SelectItem>
                 <SelectItem value="claude-opus-4-5-thinking">claude-opus-4-5-thinking（本地）</SelectItem>
                 <SelectItem value="gemini-3-flash">gemini-3-flash（本地）</SelectItem>
                 <SelectItem value="gemini-3-pro-high">gemini-3-pro-high（本地）</SelectItem>

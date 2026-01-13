@@ -291,6 +291,35 @@ export function useChat({ userId, onError }: UseChatOptions) {
     [userId],
   )
 
+  // 更新对话标题
+  const updateConversationTitle = useCallback(
+    async (conversationId: string, title: string) => {
+      try {
+        const response = await fetch(`/api/conversations/${conversationId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === conversationId ? { ...c, title: result.conversation.title } : c
+            )
+          )
+          return true
+        }
+        return false
+      } catch (error) {
+        console.error("更新对话标题失败:", error)
+        toast({ title: "更新失败", variant: "destructive" })
+        return false
+      }
+    },
+    [],
+  )
+
   // 删除对话
   const deleteConversation = useCallback(
     async (conversationId: string) => {
@@ -589,6 +618,7 @@ export function useChat({ userId, onError }: UseChatOptions) {
     // 新增对话管理方法
     loadConversations,
     createConversation,
+    updateConversationTitle,
     deleteConversation,
     switchConversation,
     startNewConversation,

@@ -12,6 +12,9 @@ services:
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
       - LOCAL_API_KEY=${LOCAL_API_KEY:-}
       - LOCAL_API_BASE_URL=http://host.docker.internal:8045/v1
+      - QWEN_API_KEY=${QWEN_API_KEY:-123456}
+      - QWEN_BASE_URL=${QWEN_BASE_URL:-http://118.178.253.190:8317/v1}
+      - QWEN_MODEL=${QWEN_MODEL:-qwen3-max}
     volumes:
       - ./public/uploads:/app/public/uploads
     depends_on:

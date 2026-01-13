@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/hooks/use-toast"
-import { Copy, Plus, RefreshCw } from "lucide-react"
+import { Copy, RefreshCw } from "lucide-react"
 
 interface Message {
   id: string
@@ -120,26 +120,6 @@ export function MessageList({
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="flex items-center justify-between p-3 sm:p-4 border-b bg-background/95 backdrop-blur-sm">
-        <h2 className="font-semibold text-sm sm:text-base truncate"> {currentCharacter?.name || "AI"} </h2>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (onNewConversation) {
-                const ok = messages.length > 0 ? window.confirm("开始新对话将清空当前消息，确认继续？") : true
-                if (ok) onNewConversation()
-              }
-            }}
-            className="text-xs sm:text-sm bg-transparent"
-          >
-            <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">新建对话</span>
-          </Button>
-        </div>
-      </div>
-
       <div className="flex-1 min-h-0 p-3 sm:p-4 scrollbar-thin overflow-y-auto" ref={scrollAreaRef}>
         {hasMore && (
           <div className="text-center mb-4">

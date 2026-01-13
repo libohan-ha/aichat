@@ -22,11 +22,25 @@ function getLocalApiConfig() {
   return { apiKey, baseURL }
 }
 
+function getQwenConfig() {
+  const apiKey = process.env.QWEN_API_KEY || "123456"
+  const baseURL = process.env.QWEN_BASE_URL || "http://118.178.253.190:8317/v1"
+  const model = process.env.QWEN_MODEL || "qwen3-max"
+  return { apiKey, baseURL, model }
+}
+
 // 本地API支持的模型列表
 const LOCAL_API_MODELS = ["claude-opus-4-5-thinking", "gemini-3-flash", "gemini-3-pro-high"]
 
+// Qwen API支持的模型列表
+const QWEN_MODELS = ["qwen3-max"]
+
 function isLocalApiModel(model: string): boolean {
   return LOCAL_API_MODELS.some(m => model.toLowerCase() === m.toLowerCase())
+}
+
+function isQwenModel(model: string): boolean {
+  return QWEN_MODELS.some(m => model.toLowerCase() === m.toLowerCase())
 }
 
 // 通过文件内容检测真实的MIME类型
@@ -190,6 +204,60 @@ export async function POST(request: NextRequest) {
         })
       } catch (apiError: any) {
         console.error("Local API Error Details:", {
+          status: apiError?.status,
+          message: apiError?.message,
+          error: apiError?.error,
+        })
+        throw apiError
+      }
+    }
+
+    // Check if using Qwen API model
+    if (typeof chosenModel === "string" && isQwenModel(chosenModel)) {
+      const qwenConfig = getQwenConfig()
+      const qwenClient = new OpenAI({ apiKey: qwenConfig.apiKey, baseURL: qwenConfig.baseURL })
+
+      const requestMessages = [systemMessage, ...formattedMessages]
+      console.log("Qwen API Request:", JSON.stringify({ model: chosenModel, messageCount: requestMessages.length }, null, 2))
+
+      try {
+        const completion = await qwenClient.chat.completions.create({
+          model: chosenModel,
+          messages: requestMessages as any,
+          stream: true,
+          temperature: 0.7,
+          max_tokens: 4096,
+        })
+
+        // 创建流式响应
+        const encoder = new TextEncoder()
+        const stream = new ReadableStream({
+          async start(controller) {
+            try {
+              for await (const chunk of completion) {
+                const content = chunk.choices[0]?.delta?.content || ""
+                if (content) {
+                  const data = encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+                  controller.enqueue(data)
+                }
+              }
+              controller.close()
+            } catch (error) {
+              console.error("Stream error:", error)
+              controller.error(error)
+            }
+          },
+        })
+
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+          },
+        })
+      } catch (apiError: any) {
+        console.error("Qwen API Error Details:", {
           status: apiError?.status,
           message: apiError?.message,
           error: apiError?.error,
